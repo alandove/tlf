@@ -26,6 +26,7 @@
 
 #include "hamlib/rig.h"
 #include "bandmap.h"
+#include "debug.h"
 #include "dxcc.h"
 
 enum {
@@ -308,6 +309,13 @@ enum {
 
 #define QSOS(n)    (((struct qso_t*)g_ptr_array_index(qso_array, n))->logline)
 #define NR_QSOS	   (qso_array->len)
+
+/* Fix for changed rigerror() behaviour */
+#if HAMLIB_VERSION > 450
+#define tlf_rigerror(errcode) rigerror2(errcode)
+#else
+#define tlf_rigerror(errcode) rigerror(errcode)
+#endif
 
 #endif /* TLF_H */
 

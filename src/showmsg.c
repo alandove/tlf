@@ -30,7 +30,7 @@ static int linectr = 0;
 void clearmsg() {
     clear();
     linectr = 0;
-    refreshp();
+    refresh();
 }
 
 
@@ -41,7 +41,6 @@ void clearmsg_wait(void) {
 	mvaddstr(LINES - 2, 0, "Press any key to continue!");
 	move(LINES - 1, 0);
 	clrtoeol();
-	refreshp();
 	IGNORE(key_get());
     } else {
 	sleep(1);
@@ -50,35 +49,36 @@ void clearmsg_wait(void) {
 }
 
 
-static int has_room_for_message() {
+static bool has_room_for_message() {
     if (linectr < LINES - 3)
-	return 1;
+	return true;
     else
-	return 0;
+	return false;
+}
+
+void show_formatted(char *fmt, ...) {
+    va_list args;
+
+    if (!has_room_for_message())
+	clearmsg_wait();
+
+    va_start(args, fmt);
+    char *str = g_strdup_vprintf(fmt, args);
+    va_end(args);
+    mvaddstr(linectr, 0, str);
+    g_free(str);
+    refresh();
+    linectr++;
 }
 
 void showmsg(char *message) {
-    if (!has_room_for_message())
-	clearmsg_wait();
-    mvaddstr(linectr, 0, message);
-    refreshp();
-    linectr++;
+    show_formatted("%s", message);
 }
-//---------------------------------------------------------------
 
 void shownr(char *message, int nr) {
-    if (!has_room_for_message())
-	clearmsg_wait();
-    mvprintw(linectr, 0, "%s %d", message, nr);
-    refreshp();
-    linectr++;
+    show_formatted("%s %d", message, nr);
 }
-//----------------------------------------------------------------
 
 void showstring(const char *message1, const char *message2) {
-    if (!has_room_for_message())
-	clearmsg_wait();
-    mvprintw(linectr, 0, "%s %s", message1, message2);
-    refreshp();
-    linectr++;
+    show_formatted("%s %s", message1, message2);
 }

@@ -62,7 +62,7 @@
 #include "setcontest.h"
 #include "set_tone.h"
 #include "splitscreen.h"
-#include "startmsg.h"
+#include "showmsg.h"
 #include "tlf_panel.h"
 #include "readcabrillo.h"
 #include "ui_utils.h"
@@ -78,6 +78,7 @@ int portnum = 0;
 
 bool use_rxvt = false;
 bool use_xterm = false;
+bool tlf_initialized = false;   // true: everything has been set up
 
 int tlfcolors[8][2] = { {COLOR_BLACK, COLOR_WHITE},
     {COLOR_GREEN, COLOR_YELLOW},
@@ -88,10 +89,10 @@ int tlfcolors[8][2] = { {COLOR_BLACK, COLOR_WHITE},
     {COLOR_BLUE, COLOR_YELLOW},
     {COLOR_WHITE, COLOR_BLACK}
 };
-bool debugflag = false;
+int debuglevel = 0;
 char *editor_cmd = NULL;
 int tune_val = 0;
-int use_bandoutput = 0;
+bool use_bandoutput = false;
 bool no_arrows = false;
 int bandindexarray[10] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
 bool cqwwm2 = false;
@@ -171,7 +172,8 @@ char multsfile[80] = "";	/* name of file with a list of allowed
 char exchange_list[40] = "";
 int timeoffset = 0;
 int trxmode = CWMODE;
-rmode_t  rigmode = RIG_MODE_NONE;
+rmode_t rigmode = RIG_MODE_NONE;
+bool rig_mode_sync;     /* keep TLF and rig mode in sync */
 
 bool mixedmode = false;
 char sent_rst[4] = "599";
@@ -199,32 +201,33 @@ int xplanet = MARKER_NONE;
 int rigptt = 0;
 int tune_seconds;               /* tune up time in seconds for Alt-T */
 
-char message[25][80] = /**< Array of CW messages
- 			*
- 			* message[0]..[11] activated by F1..F12 key
- 			* message[12] - TU message S&P mode
- 			* message[13] - TU message CQ mode
- 			* message[14]..[23] activated by Alt-0..9
-			* message[24] - S&P call message
- 			*
- 			* special use:
-			*
- 			* message[0]  (F1)  - 'cq message' in CQ mode,
-			*                     'de <call>' in S&P
-			* message[2]  (F3)  - send rapport
-			* message[4]  (F5)  - hiscall (used if '?' entered
-			* 		      in call field
-			* message[6]  (F7)  - 'worked before' message
- 			* message[11] (F12) - used for auto-cq
-			*
-			* additional use if in CTCOMP mode
-			* message[1]  (F2)  - insert pressed
- 			*/
+char message[25][80] = /* Array of CW messages */
 {
-    "TEST %", "@ DE %", "@ [", "TU 73", "@", "%",
-    "@ SRI QSO B4 GL", "AGN",
-    "?", "QRZ?", "PSE K", "TEST % %", "@ [", "TU %",
-    "", "", "", "", "", "", "", "", "", "", ""
+    "TEST %",		/* message[0]  (F1) 'cq message' in CQ mode, 'de <call>' in S&P */
+    "@ DE %",		/* message[1]  (F2) additional use if in CTCOMP mode: insert pressed */
+    "@ [",		/* message[2]  (F3) send rapport */
+    "TU 73",		/* message[3]  (F4) */
+    "@",		/* message[4]  (F5) hiscall (used if '?' entered in call field */
+    "%",		/* message[5]  (F6) */
+    "@ SRI QSO B4 GL",	/* message[6]  (F7) 'worked before' message */
+    "AGN",		/* message[7]  (F8) */
+    "?",		/* message[8]  (F9) */
+    "QRZ?",		/* message[9]  (F10) */
+    "PSE K",		/* message[10] (F11) */
+    "TEST % %",		/* message[11] (F12) used for auto-cq */
+    "@ [",		/* message[12] TU message S&P mode */
+    "TU %",		/* message[13] TU message CQ mode */
+    "",			/* message[14] (Alt-0) */
+    "",			/* message[15] (Alt-1) */
+    "",			/* message[16] (Alt-2) */
+    "",			/* message[17] (Alt-3) */
+    "",			/* message[18] (Alt-4) */
+    "",			/* message[19] (Alt-5) */
+    "",			/* message[20] (Alt-6) */
+    "",			/* message[21] (Alt-7) */
+    "",			/* message[22] (Alt-8) */
+    "",			/* message[23] (Alt-9) */
+    "",			/* message[24] S&P call message */
 };
 
 char *digi_message[sizeof(message) / sizeof(message[0])];
@@ -450,7 +453,10 @@ static const struct argp_option options[] = {
     {"no-rig",      'r', 0, 0,  "Start without radio control" },
     {"list",	    'l', 0, 0,  "List built-in contests" },
     {"sync",        's', "URL", 0,  "Synchronize log with other node" },
-    {"debug",       'd', 0, 0,  "Debug mode" },
+    {
+	"debug",       'd', "LEVEL (1..4)", 0,
+	"Debug level (Error, Warn, Info, Debug)"
+    },
     {"verbose",     'v', 0, 0,  "Produce verbose output" },
     { 0 }
 };
@@ -480,13 +486,18 @@ static error_t parse_opt(int key, char *arg, struct argp_state *state) {
 	    break;
 	case 's':
 	    if (strlen(arg) >= 120) {
-		printf("Argument too long for sync\n");
+		fprintf(stderr, "Argument too long for sync\n");
 		exit(EXIT_FAILURE);
 	    }
 	    strcpy(synclogfile, arg);
 	    break;
-	case 'd':		// debug rigctl
-	    debugflag = true;
+	case 'd':		// debug level
+	    debuglevel = arg[0] - '0';
+	    if ((strlen(arg) != 1)  || !isdigit(arg[0]) ||
+		    (debuglevel > 4) || (debuglevel == 0)) {
+		fprintf(stderr, "Debuglevel should be 1..4\n");
+		exit(EXIT_FAILURE);
+	    }
 	    break;
 	case 'v':		// verbose startup
 	    verbose = true;
@@ -548,9 +559,6 @@ static void ui_init() {
 
 	exit(EXIT_FAILURE);
     }
-
-    InitSearchPanel();	/* at least one panel has to be defined
-				   for refreshp() to work */
 
     getmaxyx(stdscr, ymax, xmax);
     if ((ymax < 22) || (xmax < 80)) {
@@ -643,6 +651,7 @@ static void init_variables() {
     portnum = 0;
     packetinterface = 0;
     nodes = 0;
+    using_named_nodes = false;
     shortqsonr = 0;
     tune_seconds = 6;   /* tune up for 6 s */
     unique_call_multi = MULT_NONE;
@@ -652,6 +661,16 @@ static void init_variables() {
     leading_zeros_serial = true;
     ctcomp = false;
     resend_call = RESEND_NOT_SET;
+    cwstart = 0;    // off
+    rig_mode_sync = true;
+    use_bandoutput = false;
+
+    lan_active = false;
+    thisnode = 'A';
+    lan_port = 6788;
+    bzero(bc_hostaddress, sizeof(bc_hostaddress));
+    bzero(bc_hostport, sizeof(bc_hostport));
+    time_master = false;
 
     g_free(current_qso.call);
     current_qso.call = g_malloc0(CALL_SIZE);
@@ -768,6 +787,8 @@ static void hamlib_init() {
 	return;
     }
 
+    rig_debug_init();
+
     shownr("Rig model number is", myrig_model);
     shownr("Rig speed is", serial_rate);
 
@@ -853,7 +874,7 @@ static void keyer_init() {
 
 	    write_tone();
 
-	    snprintf(keyerbuff, 3, "%2u", GetCWSpeed());
+	    snprintf(keyerbuff, 3, "%2u", speed);
 	    netkeyer(K_SPEED, keyerbuff);		// set speed
 
 	    netkeyer(K_WEIGHT, weightbuf);		// set weight
@@ -1024,6 +1045,10 @@ int main(int argc, char *argv[]) {
 
     argp_parse(&argp, argc, argv, 0, 0, NULL);  // parse options
 
+    if (!debug_init()) {
+	showmsg("Could not intialize debug logging");
+    }
+
     ui_init();
 
     rst_init(NULL);
@@ -1127,6 +1152,9 @@ int main(int argc, char *argv[]) {
 	endwin();
 	exit(EXIT_FAILURE);
     }
+
+    tlf_initialized = true;
+
 
     /* now start logging  !! Does never return */
     logit();

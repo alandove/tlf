@@ -63,14 +63,34 @@ void broadcast_lan(void) {
     }
 }
 
-
-/** update band, date and time */
+/** update band, mode, date and time */
 void update_line(const char *timestr) {
 
     attron(COLOR_PAIR(C_WINDOW) | A_STANDOUT);
 
     mvaddstr(12, 0, band[bandinx]);
+
+    if (trxmode == CWMODE)
+	mvaddstr(12, 3, "CW ");
+    else if (trxmode == SSBMODE)
+	mvaddstr(12, 3, "SSB");
+    else
+	mvaddstr(12, 3, "DIG");
+
     mvaddstr(12, 7, timestr);
+}
+
+void update_line_rst() {
+
+    attron(COLOR_PAIR(C_WINDOW) | A_STANDOUT);
+
+    if (no_rst) {
+	mvaddstr(12, 44, "   ");
+	mvaddstr(12, 49, "   ");
+    } else {
+	mvaddstr(12, 44, sent_rst);
+	mvaddstr(12, 49, recvd_rst);
+    }
 }
 
 const char *FREQ_DISPLAY_FORMAT = " %s: %7.1f";
@@ -115,6 +135,13 @@ void time_update(void) {
     if (freq > 0 && fabs(freq - old_freq) >= 100) {
 	force_show_freq = true;
 	old_freq = freq;
+    }
+
+    static int old_trxmode = -1;
+    if (trxmode != old_trxmode) {
+	old_trxmode = trxmode;
+	update_line(time_buf);
+	update_line_rst();
     }
 
     if (force_show_freq) {

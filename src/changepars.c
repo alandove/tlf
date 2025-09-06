@@ -34,6 +34,7 @@
 #include "audio.h"
 #include "cqww_simulator.h"
 #include "changepars.h"
+#include "change_rst.h"
 #include "clear_display.h"
 #include "dxcc.h"
 #include "editlog.h"
@@ -70,6 +71,71 @@ void center_fkey_header();
 
 void wipe_display();
 
+static void change_autosend() {
+    mvaddstr(13, 29, "Autosend: (0, 2..5, m)?");
+    refreshp();
+    int x;
+
+    /* wait for valid input or ESC */
+    do {
+	x = key_get();
+	if (x == ESCAPE)
+	    return;
+    } while (!(x == '0' || (x >= '2' && x <= '5') || x == 'm'));
+
+    /* remember new setting */
+    if (x == '0' || (x >= '2' && x <= '5'))
+	cwstart = x - '0';
+    else
+	cwstart = -1;   // manual mode
+
+    char *status;
+    if (cwstart > 0) {
+	status = g_strdup_printf("%d", cwstart);
+    } else if (cwstart < 0) {
+	status = g_strdup("Manual");
+    } else {
+	status = g_strdup("OFF");
+    }
+
+    mvprintw(13, 29, "Autosend now: %-9s", status);
+    g_free(status);
+
+    refreshp();
+    sleep(1);
+}
+
+void set_trxmode_internally(int mode) {
+
+    trxmode = mode;
+    rst_set_strings();
+
+    if (trxmode == CWMODE) {
+	if (cwkeyer == MFJ1278_KEYER) {
+	    sendmessage("MODE CW\015K\015");
+	}
+    } else if (trxmode == DIGIMODE) {
+	if (cwkeyer == MFJ1278_KEYER) {
+	    sendmessage("MODE VB\015K\015");
+	}
+    }
+}
+
+void set_trxmode(int mode) {
+
+    set_trxmode_internally(mode);
+
+    // set mode on rig
+    if (trxmode == CWMODE) {
+	set_outfreq(SETCWMODE);
+    } else if (trxmode == SSBMODE) {
+	set_outfreq(SETSSBMODE);
+    } else if (trxmode == DIGIMODE) {
+	set_outfreq(SETDIGIMODE);
+    }
+}
+
+
 int changepars(void) {
 
     char parameterstring[20] = "";
@@ -77,7 +143,6 @@ int changepars(void) {
     int i, k, x, nopar = 0;
     int maxpar = 50;
     int volumebuffer;
-    int currentmode = 0;
 
     strcpy(parameters[0], "SPOT");
     strcpy(parameters[1], "MAP");
@@ -292,11 +357,11 @@ int changepars(void) {
 	}
 	case 23: {		/*  MODE   */
 	    if (trxmode == CWMODE)
-		trxmode = SSBMODE;
+		set_trxmode(SSBMODE);
 	    else if (trxmode == SSBMODE)
-		trxmode = DIGIMODE;
+		set_trxmode(DIGIMODE);
 	    else
-		trxmode = CWMODE;
+		set_trxmode(CWMODE);
 
 	    if (trxmode == CWMODE) {
 		mvaddstr(13, 29, "TRXMODE = CW");
@@ -317,7 +382,7 @@ int changepars(void) {
 
 	    read_logcfg();
 	    read_rules();	/* also reread rules file */
-	    TLF_LOG_INFO("Logcfg.dat loaded, parameters written.");
+	    TLF_SHOW_INFO("Logcfg.dat loaded, parameters written.");
 	    center_fkey_header();
 	    clear_display();
 	    break;
@@ -360,21 +425,15 @@ int changepars(void) {
 	}
 	case 30:			/* CW  */
 	case 49: {
-	    if (cwkeyer == MFJ1278_KEYER) {
-		sendmessage("MODE CW\015K\015");
-	    }
-	    trxmode = CWMODE;
-	    set_outfreq(SETCWMODE);
+	    set_trxmode(CWMODE);
 	    break;
 	}
 	case 31: {		/* SSBMODE  */
-	    trxmode = SSBMODE;
-	    set_outfreq(SETSSBMODE);
+	    set_trxmode(SSBMODE);
 	    break;
 	}
 	case 32: {		/* DIGIMODE  */
-	    trxmode = DIGIMODE;
-	    set_outfreq(SETDIGIMODE);
+	    set_trxmode(DIGIMODE);
 	    break;
 	}
 	case 33: {		/* PACKET  */
@@ -384,13 +443,13 @@ int changepars(void) {
 	}
 	case 34: {		/* SIMULATOR  */
 	    if (!CONTEST_IS(CQWW)) {
-		TLF_LOG_INFO(
+		TLF_SHOW_INFO(
 		    "Simulator mode is only supported for CQWW contest!");
 		break;
 	    }
 
 	    if (callmaster == NULL) {
-		TLF_LOG_INFO(
+		TLF_SHOW_INFO(
 		    "Simulator mode needs callmaster database");
 		break;
 	    }
@@ -400,7 +459,7 @@ int changepars(void) {
 		simulator = true;
 		cqmode = CQ;
 		if (ctcomp) {
-		    TLF_LOG_INFO(
+		    TLF_SHOW_INFO(
 			"The simulator only works in TRmode. Switching to TRmode");
 		    ctcomp = false;
 		} else {
@@ -412,7 +471,7 @@ int changepars(void) {
 		if (cwkeyer == NET_KEYER) {
 
 		    if (netkeyer(K_WORDMODE, NULL) < 0) {
-			TLF_LOG_INFO("keyer not active; switching to SSB");
+			TLF_SHOW_INFO("keyer not active; switching to SSB");
 			trxmode = SSBMODE;
 			clear_display();
 		    }
@@ -426,7 +485,7 @@ int changepars(void) {
 		if (cwkeyer == NET_KEYER) {
 
 		    if (netkeyer(K_RESET, NULL) < 0) {
-			TLF_LOG_INFO("keyer not active; switching to SSB");
+			TLF_SHOW_INFO("keyer not active; switching to SSB");
 			trxmode = SSBMODE;
 			clear_display();
 		    }
@@ -440,8 +499,6 @@ int changepars(void) {
 	    networkinfo();
 	    miniterm = currentterm;
 
-	    if (currentmode == DIGIMODE)
-		trxmode = DIGIMODE;
 	    break;
 	}
 	case 36: {		/* CLOFF  */
@@ -577,8 +634,7 @@ int changepars(void) {
 	    break;
 	}
 	case 47: {		/* RTTY Initialize mode (MFJ1278B controller) */
-	    sendmessage("MODE VB\015K\015");
-	    trxmode = DIGIMODE;
+	    set_trxmode(DIGIMODE);
 
 	    break;
 	}
@@ -589,36 +645,7 @@ int changepars(void) {
 	    break;
 	}
 	case 50: {		/* CHARS */
-	    mvaddstr(13, 29, "Autosend: (0, 2..5, m)?");
-	    refreshp();
-	    x = 1;
-
-	    /* wait for correct input or ESC */
-	    while ((x != 0) && !((x >= 2) && (x <= 5)) && !(x == 'm' - '0')) {
-		x = key_get();
-		if (x == ESCAPE)
-		    break;
-		x = x - '0';
-	    }
-
-	    /* remember new setting */
-	    if (x != ESCAPE) {
-		if (x == 0 || (x >= 2 && x <= 5))
-		    cwstart = x;
-		else
-		    cwstart = -1;
-	    }
-
-	    if (cwstart > 0)
-		mvprintw(13, 29, "Autosend now: %1d        ",
-			 cwstart);
-	    else {
-		if (cwstart < 0)
-		    mvaddstr(13, 29, "Autosend now: Manual   ");
-		else
-		    mvaddstr(13, 29, "Autosend now: OFF      ");
-	    }
-	    refreshp();
+	    change_autosend();
 	    break;
 
 	}
@@ -664,38 +691,57 @@ void networkinfo(void) {
 
     wipe_display();
 
-    if (lan_active)
-	mvaddstr(1, 10, "Network status: on");
-    else
+    int n_nodes = 0;
+
+    if (lan_active) {
+	mvprintw(1, 10, "Network status: on   Node: %c", thisnode);
+	mvprintw(3, 32, "Total packets rcvd: %d | %d", recv_packets, recv_error);
+
+	for (int i = 0; i < nodes; i++) {
+	    if (*bc_hostaddress[i] == 0) {
+		continue;
+	    }
+	    GString *info = g_string_new(NULL);
+	    int column = 10;
+	    if (using_named_nodes) {
+		char *id = g_strdup_printf("%c%c) ",
+					   (i == thisnode - 'A' ? '*' : ' '),
+					   'A' + i
+					  );
+		g_string_append(info, id);
+		g_free(id);
+		column -= 4;
+	    }
+	    g_string_append(info, bc_hostaddress[i]);
+	    if (bc_hostport[i] > 0) {
+		char *port = g_strdup_printf(":%d", bc_hostport[i]);
+		g_string_append(info, port);
+		g_free(port);
+	    }
+	    char *s = g_string_free(info, FALSE);
+	    mvaddstr(4 + n_nodes, column, s);
+	    g_free(s);
+
+	    mvprintw(4 + n_nodes, 38, "Packets sent: %d | %d ",
+		     send_packets[i], send_error[i]);
+	    ++n_nodes;
+	}
+    } else {
 	mvaddstr(1, 10, "Network status: off");
-
-    mvprintw(3, 28, "Packets rcvd: %d | %d", recv_packets, recv_error);
-
-    for (int i = 0; i < nodes; i++) {
-	mvaddstr(4 + i, 10, bc_hostaddress[i]);
-	mvprintw(4 + i, 28, "Packets sent: %d | %d ",
-		 send_packets[i], send_error[i]);
     }
 
-    if (strlen(config_file) > 0)
-	mvprintw(6 + nodes, 10, "Config file: %s", config_file);
-    else
-	mvprintw(6 + nodes, 10,
-		 "Config file: /usr/local/share/tlf/logcfg.dat");//FIXME
-    mvprintw(7 + nodes, 10, "Contest    : %s", whichcontest);
-    mvprintw(8 + nodes, 10, "Logfile    : %s", logfile);
+    mvprintw(6 + n_nodes, 10, "Config file: %s", config_file);
+    mvprintw(7 + n_nodes, 10, "Contest    : %s", whichcontest);
+    mvprintw(8 + n_nodes, 10, "Logfile    : %s", logfile);
 
-    mvprintw(9 + nodes, 10, "Cluster    : %s", pr_hostaddress);
-    mvprintw(10 + nodes, 10, "TNCport    : %s", tncportname);
-    mvprintw(11 + nodes, 10, "RIGport    : %s", rigportname);
-    if (use_bandoutput == 1)
-	mvaddstr(12 + nodes, 10, "Band output: on");
-    else
-	mvaddstr(12 + nodes, 10, "Band output: off");
-
-    mvprintw(13 + nodes, 10, "callmaster : %s",
+    mvprintw(9 + n_nodes, 10, "Cluster    : %s", pr_hostaddress);
+    mvprintw(10 + n_nodes, 10, "TNCport    : %s", tncportname);
+    mvprintw(11 + n_nodes, 10, "RIGport    : %s", rigportname);
+    mvprintw(12 + n_nodes, 10, "Band output: %s",
+	     (use_bandoutput ? "on" : "off"));
+    mvprintw(13 + n_nodes, 10, "callmaster : %s",
 	     (callmaster_version[0] != 0 ? callmaster_version : "n/a"));
-    mvprintw(14 + nodes, 10, "cty.dat    : %s",
+    mvprintw(14 + n_nodes, 10, "cty.dat    : %s",
 	     (cty_dat_version[0] != 0 ? cty_dat_version : "n/a"));
 
     refreshp();

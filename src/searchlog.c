@@ -66,7 +66,7 @@ char qtcflags[6] = {' ', ' ', ' ', ' ', ' ', ' '};
 
 PANEL *search_panel;
 WINDOW *search_win;
-static int initialized = 0;
+static bool initialized = FALSE;
 int nr_bands;
 
 void show_needed_sections(void);
@@ -92,12 +92,12 @@ void InitSearchPanel() {
     search_win = newwin(nr_bands + 2, 39, 1, 41);
     search_panel = new_panel(search_win);
     hide_panel(search_panel);
+    initialized = TRUE;
 }
 
 void ShowSearchPanel(void) {
     if (!initialized) {
 	InitSearchPanel();
-	initialized = 1;
     }
     show_panel(search_panel);
     top_panel(search_panel);
@@ -682,7 +682,6 @@ void searchlog() {
 
     if (!initialized) {
 	InitSearchPanel();
-	initialized = 1;
     }
 
     /* show checkwindow and partials */
@@ -756,7 +755,7 @@ int load_callmaster(void) {
 
     if ((cfp = fopen(callmaster_location, "r")) == NULL) {
 	g_free(callmaster_location);
-	TLF_LOG_WARN("Error opening callmaster file.");
+	TLF_SHOW_WARN("Error opening callmaster file.");
 	return 0;
     }
     g_free(callmaster_location);

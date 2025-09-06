@@ -46,7 +46,7 @@
 #include "plugin.h"
 #include "score.h"
 #include "searchcallarray.h"
-#include "startmsg.h"
+#include "showmsg.h"
 #include "store_qso.h"
 #include "ui_utils.h"
 
@@ -140,6 +140,7 @@ int readcalls(const char *logfile, bool interactive) {
 
     bool log_changed = false;
 
+    errno = 0;
     while ((read = getline(&inputbuffer, &inputbuffer_len, fp)) != -1) {
 	if (inputbuffer_len > 0) {
 	    // drop trailing newline

@@ -29,7 +29,7 @@
 #include "err_utils.h"
 #include "hamlib_keyer.h"
 #include "sendqrg.h"
-#include "startmsg.h"
+#include "showmsg.h"
 #include "gettxinfo.h"
 #include "bands.h"
 #include "globalvars.h"
@@ -51,7 +51,6 @@ bool rig_has_stop_morse() {
 void send_bandswitch(freq_t trxqrg);
 
 static int parse_rigconf();
-static void debug_tlf_rig();
 
 /* check if call input field contains a valid frequency and switch to it.
  * only integer kHz values are supported.
@@ -85,13 +84,17 @@ bool sendqrg(void) {
 
 /**************************************************************************/
 
+void show_rigerror(char *message, int errcode) {
+    char *str = g_strdup_printf("%s: %s", message, tlf_rigerror(errcode));
+    showmsg(str);
+    g_free(str);
+}
+
+
 int init_tlf_rig(void) {
     freq_t rigfreq;		/* frequency  */
     vfo_t vfo;
     int retcode;		/* generic return code from functions */
-
-    const char *ptt_file = NULL, *dcd_file = NULL;
-    dcd_type_t dcd_type = RIG_DCD_NONE;
 
     const struct rig_caps *caps;
     int rig_cwspeed;
@@ -111,9 +114,11 @@ int init_tlf_rig(void) {
 	return -1;
     }
 
-    rigportname[strlen(rigportname) - 1] = '\0';	// remove '\n'
+    g_strchomp(rigportname);	// remove trailing '\n'
     strncpy(my_rig->state.rigport.pathname, rigportname,
 	    TLFFILPATHLEN - 1);
+
+    my_rig->state.rigport.parm.serial.rate = serial_rate;
 
     caps = my_rig->caps;
 
@@ -134,16 +139,6 @@ int init_tlf_rig(void) {
 	}
     }
 
-    if (dcd_type != RIG_DCD_NONE)
-	my_rig->state.dcdport.type.dcd = dcd_type;
-    if (ptt_file)
-	strncpy(my_rig->state.pttport.pathname, ptt_file, TLFFILPATHLEN);
-    if (dcd_file)
-	strncpy(my_rig->state.dcdport.pathname, dcd_file, TLFFILPATHLEN);
-
-    my_rig->state.rigport.parm.serial.rate = serial_rate;
-
-    // parse RIGCONF parameters
     if (parse_rigconf() < 0) {
 	return -1;
     }
@@ -151,7 +146,7 @@ int init_tlf_rig(void) {
     retcode = rig_open(my_rig);
 
     if (retcode != RIG_OK) {
-	TLF_LOG_WARN("rig_open: %s", rigerror(retcode));
+	show_rigerror("rig_open", retcode);
 	return -1;
     }
 
@@ -162,28 +157,23 @@ int init_tlf_rig(void) {
 	retcode = rig_get_freq(my_rig, RIG_VFO_CURR, &rigfreq);
 
     if (retcode != RIG_OK) {
-	TLF_LOG_WARN("Problem with rig link: %s", rigerror(retcode));
-	if (!debugflag)
-	    return -1;
+	show_rigerror("Problem with rig link", retcode);
+	return -1;
     }
 
     shownr("Freq =", (int) rigfreq);
 
     if (cwkeyer == HAMLIB_KEYER) {
+
 	retcode = hamlib_keyer_get_speed(&rig_cwspeed); /* read cw speed from rig */
 
 	if (retcode == RIG_OK) {
 	    shownr("CW speed = ", rig_cwspeed);
-	    SetCWSpeed(rig_cwspeed);
+	    speed = rig_cwspeed;
 	} else {
-	    TLF_LOG_WARN("Could not read CW speed from rig: %s", rigerror(retcode));
-	    if (!debugflag)
-		return -1;
+	    show_rigerror("Could not read CW speed from rig", retcode);
+	    return -1;
 	}
-    }
-
-    if (debugflag) {	// debug rig control
-	debug_tlf_rig();
     }
 
     switch (trxmode) {
@@ -204,13 +194,10 @@ int init_tlf_rig(void) {
 }
 
 void close_tlf_rig(RIG *my_rig) {
-
     pthread_mutex_lock(&tlf_rig_mutex);
     rig_close(my_rig);		/* close port */
     rig_cleanup(my_rig);	/* if you care about memory */
     pthread_mutex_unlock(&tlf_rig_mutex);
-
-    printf("Rig port %s closed\n", rigportname);
 }
 
 static int parse_rigconf() {
@@ -255,48 +242,71 @@ static int parse_rigconf() {
     return 0;
 }
 
-
-static void debug_tlf_rig() {
-    freq_t rigfreq;
-    int retcode;
-
-    sleep(10);
-
-    pthread_mutex_lock(&tlf_rig_mutex);
-    retcode = rig_get_freq(my_rig, RIG_VFO_CURR, &rigfreq);
-    pthread_mutex_unlock(&tlf_rig_mutex);
-
-    if (retcode != RIG_OK) {
-	TLF_LOG_WARN("Problem with rig get freq: %s", rigerror(retcode));
-    } else {
-	shownr("freq =", (int) rigfreq);
+/* convert Hamlib debug levels into Tlfs ones */
+static enum tlf_debug_level rig2tlf_debug(enum rig_debug_level_e lvl) {
+    enum tlf_debug_level level;
+    switch (lvl) {
+	case RIG_DEBUG_ERR:
+	    level = TLF_DBG_ERR;
+	    break;
+	case RIG_DEBUG_WARN:
+	    level = TLF_DBG_WARN;
+	    break;
+	case RIG_DEBUG_VERBOSE:
+	    level = TLF_DBG_INFO;
+	    break;
+	case RIG_DEBUG_TRACE:
+	    level = TLF_DBG_DEBUG;
+	    break;
+	default:
+	    level = TLF_DBG_NONE;
     }
-    sleep(10);
-
-    const freq_t testfreq = 14000000;	// test set frequency
-
-    pthread_mutex_lock(&tlf_rig_mutex);
-    retcode = rig_set_freq(my_rig, RIG_VFO_CURR, testfreq);
-    pthread_mutex_unlock(&tlf_rig_mutex);
-
-    if (retcode != RIG_OK) {
-	TLF_LOG_WARN("Problem with rig set freq: %s", rigerror(retcode));
-    } else {
-	showmsg("Rig set freq ok!");
-    }
-
-    pthread_mutex_lock(&tlf_rig_mutex);
-    retcode = rig_get_freq(my_rig, RIG_VFO_CURR, &rigfreq);	// read qrg
-    pthread_mutex_unlock(&tlf_rig_mutex);
-
-    if (retcode != RIG_OK) {
-	TLF_LOG_WARN("Problem with rig get freq: %s", rigerror(retcode));
-    } else {
-	shownr("freq =", (int) rigfreq);
-	if (rigfreq != testfreq) {
-	    showmsg("Failed to set rig freq!");
-	}
-    }
-    sleep(10);
-
+    return level;
 }
+
+/* convert Tlf debug levels into Hamlib ones */
+static enum rig_debug_level_e tlf2rig_debug(enum tlf_debug_level lvl) {
+    enum rig_debug_level_e level;
+    switch (lvl) {
+	case TLF_DBG_ERR:
+	    level = RIG_DEBUG_ERR;
+	    break;
+	case TLF_DBG_WARN:
+	    level = RIG_DEBUG_WARN;
+	    break;
+	case TLF_DBG_INFO:
+	    level = RIG_DEBUG_VERBOSE;
+	    break;
+	case TLF_DBG_DEBUG:
+	    level = RIG_DEBUG_TRACE;
+	    break;
+	default:
+	    level = RIG_DEBUG_NONE;
+    }
+    return level;
+}
+
+
+/* callback receiving hamlibs debug output */
+int rig_debug_cb(enum rig_debug_level_e lvl,
+		 rig_ptr_t user_data,
+		 const char *fmt,
+		 va_list ap) {
+
+    char *format = g_strdup_printf("Rig: %s", fmt);
+    char *msg = g_strdup_vprintf(format, ap);
+    debug_log(rig2tlf_debug(lvl), msg);
+    g_free(msg);
+    g_free(format);
+    return RIG_OK;
+}
+
+/* set hamlibs debug level and install callback if debug is active */
+void rig_debug_init() {
+    if (debug_is_active()) {
+	/* set hamlib debug level and install callback */
+	rig_set_debug(tlf2rig_debug(debuglevel));
+	rig_set_debug_callback(rig_debug_cb, (rig_ptr_t)NULL);
+    }
+}
+

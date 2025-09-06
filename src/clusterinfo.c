@@ -87,8 +87,10 @@ void clusterinfo(void) {
 	    node_frequencies[thisnode - 'A'] = atof(band[bandinx]);
 
 	for (f = 0; f < MAXNODES; f++) {
+	    char node_id = 'A' + f;
 	    if (node_frequencies[f] != 0)
-		mvprintw(15 + f, 4, " Stn %c : %5.0f", 'A' + f,
+		mvprintw(15 + f, 4, "%cStn %c : %5.0f",
+			 (node_id == thisnode ? '*' : ' '), node_id,
 			 node_frequencies[f] / 1000.0);
 	}
 	nicebox(14, 3, 8, 27, "Frequencies");
@@ -131,7 +133,7 @@ void clusterinfo(void) {
 		if (spotarray[k] >= 0 && spotarray[k] < MAX_SPOTS)
 		    g_strlcpy(inputbuffer, spot_ptr[spotarray[k]], 79);
 		else {
-		    TLF_LOG_INFO("error in packet table");
+		    TLF_SHOW_INFO("error in packet table");
 		}
 
 		if (strlen(inputbuffer) > 14) {
@@ -169,7 +171,7 @@ void show_xplanet() {
 
     /* prune markerfile by opening it for write */
     if ((fp = fopen(markerfile, "w")) == NULL) {
-	TLF_LOG_INFO("Opening marker file not possible.");
+	TLF_SHOW_INFO("Opening marker file not possible.");
 	nofile = true;		/* remember: no write possible */
 	return;
     }

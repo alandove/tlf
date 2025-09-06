@@ -133,7 +133,7 @@ void show_header_line() {
 
     attron(COLOR_PAIR(C_HEADER) | A_STANDOUT);
     mvaddstr(0, 0, spaces(29));
-    mvprintw(0, 0, "  %-8s  S=%2i D=%i ", mode, GetCWSpeed(), cqdelay);
+    mvprintw(0, 0, "  %-8s  S=%2i D=%i ", mode, speed, cqdelay);
     mvaddstr(0, 21, fkey_header);
 }
 
@@ -166,13 +166,6 @@ void clear_display(void) {
 
     get_time();
 
-    if (trxmode == CWMODE)
-	mvaddstr(12, 3, "CW");
-    else if (trxmode == SSBMODE)
-	mvaddstr(12, 3, "SSB");
-    else
-	mvaddstr(12, 3, "DIG");
-
     char time_buf[20];
     format_time(time_buf, sizeof(time_buf), DATE_TIME_FORMAT);
     update_line(time_buf);
@@ -180,14 +173,8 @@ void clear_display(void) {
     qsonr_to_str(qsonrstr, qsonum);
     mvaddstr(12, 23, qsonrstr);
 
-    if (no_rst) {
-	mvaddstr(12, 44, "   ");
-	mvaddstr(12, 49, "   ");
-    } else {
-	rst_set_strings();
-	mvaddstr(12, 44, sent_rst);
-	mvaddstr(12, 49, recvd_rst);
-    }
+    rst_set_strings();
+    update_line_rst();
 
     if (searchflg)
 	searchlog();

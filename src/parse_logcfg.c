@@ -48,7 +48,8 @@
 #include "qtcvars.h"		// Includes globalvars.h
 #include "setcontest.h"
 #include "set_tone.h"
-#include "startmsg.h"
+#include "speedupndown.h"
+#include "showmsg.h"
 #include "tlf_curses.h"
 #include "searchlog.h"
 #include "tlf.h"
@@ -443,6 +444,28 @@ static int cfg_operating_mode(const cfg_arg_t arg) {
     return PARSE_OK;
 }
 
+static int cfg_autosend(const cfg_arg_t arg) {
+    char *str = g_ascii_strup(parameter, -1);
+    g_strstrip(str);
+
+    // see also change_autosend() for valid values
+    if (g_regex_match_simple("^[02345]$", str,
+			     (GRegexCompileFlags)0, (GRegexMatchFlags)0)) {
+	cwstart = atoi(str);
+    } else if (strcmp(str, "OFF") == 0) {
+	cwstart = 0;
+    } else if (strcmp(str, "M") == 0 || strcmp(str, "MANUAL") == 0) {
+	cwstart = -1;
+    } else {
+	g_free(str);
+	error_details = g_strdup("must be 0, OFF, 2, 3, 4, 5, M or MANUAL");
+	return PARSE_WRONG_PARAMETER;
+    }
+
+    g_free(str);
+    return PARSE_OK;
+}
+
 static int cfg_bandoutput(const cfg_arg_t arg) {
     char *str = g_strdup(parameter);
     g_strstrip(str);
@@ -451,7 +474,7 @@ static int cfg_bandoutput(const cfg_arg_t arg) {
 
     if (g_regex_match_simple("^\\d{10}$", str, G_REGEX_CASELESS,
 			     (GRegexMatchFlags)0)) {
-	use_bandoutput = 1;
+	use_bandoutput = true;
 	for (int i = 0; i <= 9; i++) {	// 10x
 	    bandindexarray[i] = str[i] - '0';
 	}
@@ -543,11 +566,11 @@ static int cfg_bandmap(const cfg_arg_t arg) {
 
 static int cfg_cwspeed(const cfg_arg_t arg) {
     int value = 0;	/* avoid warning about uninitialized variables */
-    int rc = cfg_integer((cfg_arg_t) {.int_p = &value, .min = 6, .max = 60});
+    int rc = cfg_integer((cfg_arg_t) {.int_p = &value, .min = CW_SPEED_MIN, .max = CW_SPEED_MAX});
     if (rc != PARSE_OK) {
 	return rc;
     }
-    SetCWSpeed(value);
+    speed = value;
     return PARSE_OK;
 }
 
@@ -589,26 +612,58 @@ static int cfg_tncport(const cfg_arg_t arg) {
     return PARSE_OK;
 }
 
-static int cfg_addnode(const cfg_arg_t arg) {
-    if (nodes >= MAXNODES) {
-	error_details = g_strdup_printf("max %d nodes allowed", MAXNODES);
-	return PARSE_WRONG_PARAMETER;
-    }
+static void parse_node(int index) {
     /* split host name and port number, separated by colon */
     char **an_fields;
     an_fields = g_strsplit(parameter, ":", 2);
     /* copy host name */
-    g_strlcpy(bc_hostaddress[nodes], g_strchomp(an_fields[0]),
+    g_strlcpy(bc_hostaddress[index], g_strchomp(an_fields[0]),
 	      sizeof(bc_hostaddress[0]));
     if (an_fields[1] != NULL) {
 	/* copy host port, if found */
-	g_strlcpy(bc_hostservice[nodes], g_strchomp(an_fields[1]),
-		  sizeof(bc_hostservice[0]));
+	bc_hostport[index] = atoi(an_fields[1]);
     }
     g_strfreev(an_fields);
 
-    nodes++;
     lan_active = true;
+}
+
+static int cfg_addnode(const cfg_arg_t arg) {
+    if (using_named_nodes) {
+	error_details = g_strdup("already using named nodes");
+	return PARSE_WRONG_PARAMETER;
+    }
+    if (nodes >= MAXNODES) {
+	error_details = g_strdup_printf("max %d nodes allowed", MAXNODES);
+	return PARSE_WRONG_PARAMETER;
+    }
+
+    parse_node(nodes);
+    nodes++;
+
+    return PARSE_OK;
+}
+
+static int cfg_node_x(const cfg_arg_t arg) {
+    gchar *x = g_match_info_fetch(match_info, 1);
+    int index = *x - 'A';
+    g_free(x);
+
+    if (index >= MAXNODES) {
+	error_details = g_strdup_printf("name is A..%c", 'A' + MAXNODES - 1);
+	return PARSE_WRONG_PARAMETER;
+    }
+    if (!using_named_nodes && nodes > 0) {
+	error_details = g_strdup("already using unnamed nodes");
+	return PARSE_WRONG_PARAMETER;
+    }
+
+    using_named_nodes = true;
+
+    parse_node(index);
+    if (index + 1 > nodes) {
+	nodes = index + 1;
+    }
 
     return PARSE_OK;
 }
@@ -617,7 +672,7 @@ static int cfg_thisnode(const cfg_arg_t arg) {
     char *str = g_ascii_strup(parameter, -1);
     g_strstrip(str);
 
-    if (strlen(str) != 1 || str[0] < 'A' || str[0] > 'A' + MAXNODES) {
+    if (strlen(str) != 1 || str[0] < 'A' || str[0] >= 'A' + MAXNODES) {
 	g_free(str);
 	error_details = g_strdup_printf("name is A..%c", 'A' + MAXNODES - 1);
 	return PARSE_WRONG_PARAMETER;
@@ -685,7 +740,6 @@ static int cfg_countrylist(const cfg_arg_t arg) {
     g_strlcpy(buffer, parameter, buffer_len);
     g_strchomp(buffer);	/* drop trailing whitespace */
 
-    printf("%s\n", buffer);
     if ((fp = fopen(buffer, "r")) != NULL) {
 	char *prefix = g_strdup_printf("%s:", whichcontest);
 
@@ -720,6 +774,7 @@ static int cfg_countrylist(const cfg_arg_t arg) {
     }
 
     if (country_list_raw == NULL) {
+	free(buffer);
 	return PARSE_WRONG_PARAMETER;   // e.g. in case of no match in file
     }
 
@@ -814,6 +869,7 @@ static int cfg_continentlist(const cfg_arg_t arg) {
     }
 
     if (cont_multiplier_list == NULL) {
+	free(buffer);
 	return PARSE_WRONG_PARAMETER;   // e.g. in case of no match in file
     }
 
@@ -1009,7 +1065,8 @@ static int cfg_rttymode(const cfg_arg_t arg) {
 }
 
 static int cfg_myqra(const cfg_arg_t arg) {
-    strcpy(my.qra, parameter);
+    g_strlcpy(my.qra, parameter, sizeof(my.qra));
+    g_strchomp(my.qra);
 
     if (check_qra(my.qra) == 0) {
 	return PARSE_WRONG_PARAMETER;
@@ -1258,6 +1315,7 @@ static config_t logcfg_configs[] = {
     {"SERIAL_EXCHANGE",	    CFG_CONTEST_BOOL(exchange_serial)},
     {"COUNTRY_MULT",	    CFG_BOOL(country_mult)},
     {"CQWW_M2",		    CFG_BOOL(cqwwm2)},
+    {"RIG_MODE_SYNC",       CFG_BOOL(rig_mode_sync)},
     {"LAN_DEBUG",	    CFG_BOOL(landebug)},
     {"CALLUPDATE",	    CFG_BOOL(call_update)},
     {"TIME_MASTER",	    CFG_BOOL(time_master)},
@@ -1385,6 +1443,7 @@ static config_t logcfg_configs[] = {
     {"SFI",             NEED_PARAM, cfg_sfi},
     {"TNCPORT",         NEED_PARAM, cfg_tncport},
     {"ADDNODE",         NEED_PARAM, cfg_addnode},
+    {"NODE_([A-Z])",    NEED_PARAM, cfg_node_x},
     {"THISNODE",        NEED_PARAM, cfg_thisnode},
     {"MULT_LIST",       NEED_PARAM, cfg_mult_list},
     {"MARKER(|DOT|CALL)S",  NEED_PARAM, cfg_markers},
@@ -1413,6 +1472,7 @@ static config_t logcfg_configs[] = {
     {"RESEND_CALL",         NEED_PARAM, cfg_resend_call},
     {"GENERIC_MULT",        NEED_PARAM, cfg_generic_mult},
     {"OPERATING_MODE",      NEED_PARAM, cfg_operating_mode},
+    {"AUTOSEND",            NEED_PARAM, cfg_autosend},
 
     {NULL}  // end marker
 };

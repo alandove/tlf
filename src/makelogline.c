@@ -92,7 +92,7 @@ char *makelogline(struct qso_t *qso) {
     }
     FILL_TO(87);
 
-    assert(strlen(logline) == 87);
+    assert(strlen(logline) == LOGLINELEN - 1);
 
     return logline;
 }
@@ -290,9 +290,12 @@ void prepare_specific_part(char *logline, struct qso_t *qso) {
 	    new_cty = 0;
 	}
 
+    } else if (generic_mult != MULT_NONE) {
+
+	strncat(logline, qso->mult1_value, 9);
+
     } else if (wysiwyg_multi
 	       || unique_call_multi != MULT_NONE
-	       || generic_mult != MULT_NONE
 	       || serial_section_mult
 	       || sectn_mult
 	       || sectn_mult_once

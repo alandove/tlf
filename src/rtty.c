@@ -35,7 +35,7 @@
 #include "globalvars.h"
 #include "printcall.h"
 #include "qtcvars.h"		// Includes globalvars.h
-#include "startmsg.h"
+#include "showmsg.h"
 #include "tlf_curses.h"
 #include "ui_utils.h"
 
@@ -122,7 +122,7 @@ void ry_addchar(char c) {
 
     // write to log file
     if ((ry_fp = fopen("RTTYlog", "a")) == NULL) {
-	TLF_LOG_INFO("cannot open RTTYlog");
+	TLF_SHOW_INFO("cannot open RTTYlog");
 	return;
     }
     fputc(c, ry_fp);

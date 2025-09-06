@@ -38,7 +38,7 @@
 
 #include "err_utils.h"
 #include "ignore_unused.h"
-#include "startmsg.h"
+#include "showmsg.h"
 #include "tlf.h"
 #include "tlf_curses.h"
 #include "ui_utils.h"
@@ -88,6 +88,7 @@ int repair_log(char *filename) {
 	return 1;
     }
 
+    errno = 0;
     while ((read = getline(&buffer, &buffer_len, infp)) != -1) {
 	if (read > 0) {
 	    /* strip trailing whitespace (and newline) */
@@ -100,6 +101,7 @@ int repair_log(char *filename) {
 
 	    fputs(buffer, outfp);
 	    fputs("\n", outfp);
+	    errno = 0;	    /* fputs leaves errno undefined */
 	}
     }
     if (errno == ENOMEM) {
@@ -158,6 +160,7 @@ int checklogfile_new(char *filename) {
     lineno = 0;
     tooshort = 0;
 
+    errno = 0;
     while ((read = getline(&buffer, &buffer_len, fp)) != -1) {
 	if (read > 0) {
 	    int band, linelen;
@@ -183,6 +186,8 @@ int checklogfile_new(char *filename) {
 	    if (!((buffer[0] == ';') || bandok)) {
 		/* msg no valid logline in line #, cannot handle it */
 		shownr("No valid log line in line ", lineno);
+		free(buffer);
+		fclose(fp);
 		return 1;
 	    }
 
@@ -194,6 +199,8 @@ int checklogfile_new(char *filename) {
 		* cannot handle that log file format */
 		shownr("Log line to long in line ", lineno);
 		showmsg("Can not handle that log format");
+		free(buffer);
+		fclose(fp);
 		return 1;
 	    }
 
@@ -248,7 +255,7 @@ void checklogfile(void) {
     FILE *fp;
 
     if ((fp = fopen(logfile, "a")) == NULL) {
-	TLF_LOG_WARN("I can not find the logfile ...");
+	TLF_SHOW_WARN("I can not find the logfile ...");
     } else {
 	fstat(fileno(fp), &statbuf);
 	fclose(fp);
@@ -257,13 +264,14 @@ void checklogfile(void) {
 
 	if ((qsobytes % LOGLINELEN) != 0) {
 	    if ((infile = fopen(logfile, "r")) == NULL) {
-		TLF_LOG_WARN("Unable to open logfile...");
+		TLF_SHOW_WARN("Unable to open logfile...");
 	    } else {
 		if ((outfile = fopen("./cpyfile", "w")) == NULL) {
 		    fclose(infile);
-		    TLF_LOG_WARN("Unable to open cpyfile...");
+		    TLF_SHOW_WARN("Unable to open cpyfile...");
 
 		} else {
+		    errno = 0;
 		    while ((read = getline(&inputbuffer, &read_len, infile)) != -1) {
 			if (read > 0) {
 			    if (strlen(inputbuffer) != LOGLINELEN) {
@@ -278,6 +286,7 @@ void checklogfile(void) {
 				inputbuffer[LOGLINELEN] = '\0';
 			    }
 			    fputs(inputbuffer, outfile);
+			    errno = 0;	    /* fputs leaves errno undefined */
 			}
 		    }
 		    if (errno == ENOMEM) {

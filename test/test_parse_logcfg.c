@@ -40,13 +40,12 @@ int nodes = 0;
 struct sockaddr_in bc_address[MAXNODES];
 int lan_port = 6788;
 bool lan_active;
+bool using_named_nodes;
 bool landebug = false;
 char thisnode = 'A';
 bool time_master;
 char bc_hostaddress[MAXNODES][16];
-char bc_hostservice[MAXNODES][16] = {
-    [0 ... MAXNODES - 1] = { [0 ... 15] = 0 }
-};
+int bc_hostport[MAXNODES];
 
 
 char netkeyer_hostaddress[16] = "127.0.0.1";
@@ -82,10 +81,7 @@ int get_total_score() {
 void ask(char *buffer, char *what) {
 }
 
-static int wpm_spy;
-void SetCWSpeed(unsigned int wpm) {
-    wpm_spy = wpm;
-}
+int speed;
 
 static char rst_init_spy[100];
 void rst_init(char *init_string) {
@@ -140,7 +136,7 @@ void time_update(void) {
     // empty
 }
 
-void handle_logging(enum log_lvl lvl, ...) {
+void handle_logging(enum tlf_debug_level lvl, char *fmt, ...) {
     // empty
 }
 
@@ -174,9 +170,11 @@ int setup_default(void **state) {
     ssbpoints = 1;
     cwpoints = 1;
     trxmode = CWMODE;
-    use_bandoutput = 0;
+    use_bandoutput = false;
     thisnode = 'A';
     nodes = 0;
+    lan_active = false;
+    using_named_nodes = false;
     xplanet = MARKER_NONE;
     dx_arrlsections = false;
     mult_side = false;
@@ -189,6 +187,7 @@ int setup_default(void **state) {
     change_rst = false;
     fixedmult = 0.0;
     exclude_multilist_type = EXCLUDE_NONE;
+    rig_mode_sync = true;
     rigptt = 0;
     minitest = 0;
     cqmode = CQ;
@@ -232,7 +231,7 @@ int setup_default(void **state) {
     }
     for (int i = 0; i < MAXNODES; ++i) {
 	bc_hostaddress[i][0] = 0;
-	bc_hostservice[i][0] = 0;
+	bc_hostport[i] = 0;
     }
     for (int i = 0; i < 255; ++i) {
 	countrylist[i][0] = 0;
@@ -433,6 +432,7 @@ static bool_true_t bool_trues[] = {
     {"MIXED", &mixedmode},
     {"IGNOREDUPE", &ignoredupe},
     {"USE_CONTINENTLIST_ONLY", &continentlist_only},
+    {"RIG_MODE_SYNC", &rig_mode_sync},
     {"RADIO_CONTROL", &trx_control},
     {"PORTABLE_MULT_2", &portable_x2},
     {"WYSIWYG_MULTIBAND", &wysiwyg_multi},
@@ -923,6 +923,12 @@ void test_operating_mode(void **state) {
     assert_int_equal(cqmode, S_P);
 }
 
+void test_autosend(void **state) {
+    int rc = call_parse_logcfg("AUTOSEND=4\n");
+    assert_int_equal(rc, 0);
+    assert_int_equal(cwstart, 4);
+}
+
 // TLFCOLOR1..6
 void test_tlfcolorn(void **state) {
     char line[80];
@@ -955,7 +961,7 @@ void test_rules(void **state) {
 void test_bandoutput(void **state) {
     int rc = call_parse_logcfg("BANDOUTPUT=9876543210\n");
     assert_int_equal(rc, PARSE_OK);
-    assert_int_equal(use_bandoutput, 1);
+    assert_true(use_bandoutput);
     for (int i = 0; i <= 9; ++i) {
 	assert_int_equal(bandindexarray[i], 9 - i);
     }
@@ -1000,7 +1006,7 @@ void test_bandmap_d100(void **state) {
 void test_cwspeed(void **state) {
     int rc = call_parse_logcfg("CWSPEED= 18 \n");
     assert_int_equal(rc, 0);
-    assert_int_equal(wpm_spy, 18);
+    assert_int_equal(speed, 18);
 }
 
 void test_cwtone(void **state) {
@@ -1043,9 +1049,20 @@ void test_addnode(void **state) {
     int rc = call_parse_logcfg("ADDNODE=hostx:1234\n");
     assert_int_equal(rc, PARSE_OK);
     assert_int_equal(lan_active, true);
+    assert_int_equal(using_named_nodes, false);
     assert_int_equal(nodes, 1);
     assert_string_equal(bc_hostaddress[0], "hostx");
-    assert_string_equal(bc_hostservice[0], "1234");
+    assert_int_equal(bc_hostport[0], 1234);
+}
+
+void test_node_x(void **state) {
+    int rc = call_parse_logcfg("NODE_C=hostx:1234\n");
+    assert_int_equal(rc, PARSE_OK);
+    assert_int_equal(lan_active, true);
+    assert_int_equal(using_named_nodes, true);
+    assert_int_equal(nodes, 3);
+    assert_string_equal(bc_hostaddress[2], "hostx");
+    assert_int_equal(bc_hostport[2], 1234);
 }
 
 void test_thisnode(void **state) {
@@ -1265,7 +1282,13 @@ void test_digimodem(void **state) {
 void test_myqra(void **state) {
     int rc = call_parse_logcfg("MYQRA=JN97\n");
     assert_int_equal(rc, PARSE_OK);
-    assert_string_equal(my.qra, "JN97\n");  // FIXME NL...
+    assert_string_equal(my.qra, "JN97");
+}
+
+void test_myqra2(void **state) {
+    int rc = call_parse_logcfg("MYQRA=JN97LA\n");
+    assert_int_equal(rc, PARSE_OK);
+    assert_string_equal(my.qra, "JN97LA");
 }
 
 void test_powermult(void **state) {

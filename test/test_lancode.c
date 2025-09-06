@@ -8,7 +8,7 @@
 
 // OBJECT ../src/lancode.o
 
-void handle_logging(enum log_lvl lvl, ...) {
+void handle_logging(enum tlf_debug_level lvl, char *fmt, ...) {
     // empty
 }
 
@@ -23,6 +23,8 @@ int setup_default(void **state) {
     trx_control = true;
     nodes = 1;
     lan_active = true;
+    using_named_nodes = false;
+    strcpy(bc_hostaddress[0], "host0");
 
     sendto_call_count = 0;
     FREE_DYNAMIC_STRING(sendto_last_message);
@@ -36,7 +38,7 @@ void test_send_freq_80(void **state) {
 
     assert_int_equal(sendto_call_count, 1);
     assert_non_null(sendto_last_message);
-    assert_string_equal(sendto_last_message, "A5 3567.9");
+    assert_string_equal(sendto_last_message, "A5 3567.9\n");
 }
 
 void test_send_freq_10(void **state) {
@@ -45,7 +47,7 @@ void test_send_freq_10(void **state) {
 
     assert_int_equal(sendto_call_count, 1);
     assert_non_null(sendto_last_message);
-    assert_string_equal(sendto_last_message, "A528123.5");
+    assert_string_equal(sendto_last_message, "A528123.5\n");
 }
 
 void test_send_freq_80_notrx(void **state) {
@@ -57,7 +59,7 @@ void test_send_freq_80_notrx(void **state) {
 
     assert_int_equal(sendto_call_count, 1);
     assert_non_null(sendto_last_message);
-    assert_string_equal(sendto_last_message, "A5   80.0");
+    assert_string_equal(sendto_last_message, "A5   80.0\n");
 }
 
 void test_send_freq_10_notrx(void **state) {
@@ -69,5 +71,5 @@ void test_send_freq_10_notrx(void **state) {
 
     assert_int_equal(sendto_call_count, 1);
     assert_non_null(sendto_last_message);
-    assert_string_equal(sendto_last_message, "A5   10.0");
+    assert_string_equal(sendto_last_message, "A5   10.0\n");
 }

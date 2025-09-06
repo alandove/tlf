@@ -35,7 +35,7 @@
 .
 .
 .\" Update the date when this page is committed.
-.TH TLF 1 "@PACKAGE_NAME@ @VERSION@, 2022-09-18" TLF "Ham radio"
+.TH TLF 1 "@PACKAGE_NAME@ @VERSION@, 2025-01-23" TLF "Ham radio"
 .
 .
 .SH NAME
@@ -46,10 +46,11 @@
 .SH SYNOPSIS
 .
 .SY @PACKAGE@
-.OP \-?dilnrvV
+.OP \-?ilnrvV
+.OP \-d level
 .OP \-f config_file
 .OP \-s user:password@host/dir/logfilename
-.OP \-\-debug
+.OP \-\-debug=\fIlevel\fP
 .OP \-\-config=\fIconfig_file\fP
 .OP \-\-import
 .OP \-\-list
@@ -150,6 +151,17 @@ Options given to @PACKAGE_NAME@ on the command line.
 .TP
 .BR \-? , \ \-\-help
 Print a summary of options to the screen and exit.
+.
+.TP
+.BI \-d\  debug_level
+.TQ
+.BI \-\-debug=  debug_level
+Activate logging of debug output. Output will be added to
+.I debug.txt
+file in actual directory.
+.
+.IP
+Allowed values with rising verbosity are 1 (Error) , 2 (Warn), 3 (Info) or 4 (Debug)
 .
 .TP
 .BI \-f\  config_file
@@ -1067,7 +1079,7 @@ In VOICE mode sends recorded message 5 (F5).
 .
 .TP
 .BR ;\  (Semicolon)
-Insert note in log.
+Insert note in log. Leave the input field blank to skip adding the note.
 .
 .TP
 .BR ,\  (comma)
@@ -1684,10 +1696,9 @@ Range: 0\(en23.
 This node transmits the time over the network (only one master allowed!).
 .
 .TP
-\fBADDNODE\fR=\fINode_address\fR[\fI:Port_number\fR]
+\fBNODE_\fIX\fR=\fINode_address\fR[\fI:Port_number\fR]
 Adds an IP address (and optionally a port number) to which we broadcast stuff.
-.RB ( WARNING :
-Only add addresses of other nodes).
+\fIX\fR is the node designator, possible values are A\(enH.
 .
 .TP
 \fBTHISNODE\fR=\fIA\fR
@@ -2060,6 +2071,15 @@ available used to activate the radio's PTT for sending voice messages instead
 of the \fBcwdaemon\fR PTT.
 .
 .TP
+\fBRIG_MODE_SYNC\fR[=<\fION\fR|\fIOFF\fR>]
+Synchronize TLF and the radio's mode. The synchronization happens in both
+directions, but it mainly affects CW and SSB modes (see also
+.BR DIGI_RIG_MODE ).
+.
+.IP
+If disabled then TLF and radio mode can be set independently. (default: on)
+.
+.TP
 \fBCWBANDWIDTH\fR=\fIwidth\fR
 Sets the CW bandwidth of your rig when changing bands.
 .
@@ -2387,22 +2407,23 @@ without being counted as a DUPE.
 Start @PACKAGE_NAME@ in SSB mode.
 .
 .IP
-If radio control is active, the radio will be placed in SSB mode, if not in
-SSB mode already.
+If radio control is active and
+.BR RIG_MODE_SYNC
+is on, the radio will be placed in SSB mode, if not in SSB mode already.
 .
 Normally @PACKAGE_NAME@ starts in CW mode and will set the radio to CW mode if
 needed.
 .
 .IP
 .BR Note :
-At this time @PACKAGE_NAME@ does not follow mode changes on the radio.
-.
 When switching modes use the
 .BR :CW ,
 .BR :SSB ,
 or
 .BR :DIG
-commands to set both @PACKAGE_NAME@ and the radio mode.
+commands to set both @PACKAGE_NAME@ and the radio mode
+(but see also
+.BR RIG_MODE_SYNC ).
 .
 .TP
 .B CQWW_M2
@@ -2525,6 +2546,15 @@ pass another value (in seconds) after the \(oq=\(cq sign.
 .
 .IP
 There must be an integral number of time sections per hour!
+.
+.TP
+\fBAUTOSEND\fR=<\fI0\fR|\fIOFF\fR|\fI2\fR..\fI5\fR|\fIM\fR|\fIMANUAL\fR>
+Set the number of characters for CW auto-start or ‘M’ for manual start.
+Default value is OFF.
+.
+For details see
+.BR :CHA r
+command.
 .
 .SS CW, Digimode and Voice Keyer Macros
 .

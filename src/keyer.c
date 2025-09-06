@@ -38,6 +38,7 @@
 #include "sendbuf.h"
 #include "speedupndown.h"
 #include "stoptx.h"
+#include "time_update.h"
 #include "tlf.h"
 #include "tlf_panel.h"
 #include "ui_utils.h"
@@ -149,15 +150,13 @@ int handle_common_key(int key) {
 
 		rst_sent_up();
 
-		if (!no_rst)
-		    mvaddstr(12, 44, sent_rst);
-		mvaddstr(12, 29, current_qso.call);
+		update_line_rst();
 
 	    } else {	// change cw speed
 		speedup();
 
 		attron(COLOR_PAIR(C_HEADER) | A_STANDOUT);
-		mvprintw(0, 14, "%2u", GetCWSpeed());
+		mvprintw(0, 14, "%2u", speed);
 	    }
 
 	    break;
@@ -181,16 +180,14 @@ int handle_common_key(int key) {
 
 		rst_sent_down();
 
-		if (!no_rst)
-		    mvaddstr(12, 44, sent_rst);
-		mvaddstr(12, 29, current_qso.call);
+		update_line_rst();
 
 	    } else {
 
 		speeddown();
 
 		attron(COLOR_PAIR(C_HEADER) | A_STANDOUT);
-		mvprintw(0, 14, "%2u", GetCWSpeed());
+		mvprintw(0, 14, "%2u", speed);
 	    }
 	    break;
 	}
@@ -204,7 +201,7 @@ int handle_common_key(int key) {
 
 	    nicebox(1, 1, 2, 12, "CW");
 	    attron(COLOR_PAIR(C_LOG) | A_STANDOUT);
-	    mvprintw(2, 2, "Speed:   %2u ", GetCWSpeed());
+	    mvprintw(2, 2, "Speed:   %2u ", speed);
 	    mvprintw(3, 2, "Weight: %3d ", weight);
 	    move(3, 10);
 	    refreshp();

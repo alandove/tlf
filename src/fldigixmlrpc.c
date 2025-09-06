@@ -45,7 +45,7 @@
 #include "logit.h"
 #include "printcall.h"
 #include "searchlog.h"
-#include "startmsg.h"
+#include "showmsg.h"
 #include "tlf_curses.h"
 #include "ui_utils.h"
 
@@ -210,7 +210,7 @@ int fldigi_xmlrpc_query(xmlrpc_res *local_result, xmlrpc_env *local_env,
     if (connerr && use_fldigi) {
 	if (connerrcnt == 10) {
 	    use_fldigi = false;
-	    TLF_LOG_WARN("Fldigi: lost connection!");
+	    TLF_SHOW_WARN("Fldigi: lost connection!");
 	} else {
 	    connerrcnt++;
 	}

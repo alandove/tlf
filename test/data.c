@@ -37,6 +37,8 @@ char pr_hostaddress[48] = "111.222.111.222";
 char *config_file = NULL;
 int portnum = 0;
 
+bool tlf_initialized = false;
+
 bool use_rxvt = false;
 int use_xterm = 0;
 int tlfcolors[8][2] = { {COLOR_BLACK, COLOR_WHITE},
@@ -50,11 +52,11 @@ int tlfcolors[8][2] = { {COLOR_BLACK, COLOR_WHITE},
 };
 
 
-bool debugflag = false;
+int debuglevel = 0;
 char *editor_cmd = NULL;
 char rttyoutput[120];
 int tune_val = 0;
-int use_bandoutput = 0;
+bool use_bandoutput = false;
 bool no_arrows = false;
 int bandindexarray[10] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
 bool cqwwm2 = false;
@@ -149,7 +151,7 @@ cqmode_t cqmode = CQ;
 bool demode = false;		/* send DE  before s&p call  */
 int announcefilter = FILTER_ANN; /*  filter cluster  announcements */
 bool showscore_flag = false;	/* show  score window */
-int change_rst = 0;
+bool change_rst = 0;
 int defer_store = 0;
 mystation_t my;
 char logfile[120] = "general.log";
@@ -412,6 +414,7 @@ char lan_logline[256];	    // defined in log_to_disk.c
 /* resend call option, can be 0 (do not use), 1 (partial), 2 (full) */
 int resend_call;
 char sentcall[20] = "";     // storing the call what already sent
+bool rig_mode_sync;
 
 #include <curses.h>
 NCURSES_EXPORT_VAR(WINDOW *) stdscr = NULL;

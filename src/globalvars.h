@@ -88,6 +88,7 @@ extern char logline_edit[5][LOGLINELEN + 1];
 
 extern char band[NBANDS][4];
 extern freq_t bandfrequency[NBANDS];
+extern bool rig_mode_sync;
 
 extern struct tm *time_ptr;
 
@@ -130,6 +131,7 @@ extern int minitest;    // minitest period length in seconds, 0 if not used
 extern int portnum;
 extern int lan_port;
 extern int txdelay;
+extern int speed; /* CW speed in wpm */
 extern int weight;
 extern int cw_bandwidth;
 extern int cwpoints;
@@ -138,9 +140,10 @@ extern int continentlist_points;
 extern int dx_cont_points;
 extern int my_cont_points;
 extern int packetinterface;
-extern int use_bandoutput;
+extern bool use_bandoutput;
 extern int cluster;
 extern int nodes;
+extern bool using_named_nodes;
 extern int multlist;
 extern int xplanet;
 extern int cwkeyer;
@@ -166,6 +169,7 @@ extern bool demode;
 extern bool ctcomp;
 extern bool show_time;
 extern bool use_rxvt;
+extern bool tlf_initialized;
 extern bool time_master;
 extern bool noautocq;
 extern bool no_arrows;
@@ -251,7 +255,7 @@ extern bool qso_once;
 extern bool leading_zeros_serial;
 extern bool ignoredupe;
 extern bool continentlist_only;
-extern bool debugflag;
+extern int debuglevel;
 extern bool trx_control;
 extern bool nopacket;
 extern bool verbose;

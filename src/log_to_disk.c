@@ -40,13 +40,14 @@
 #include "score.h"
 #include "store_qso.h"
 #include "setcontest.h"
+#include "time_update.h"
 #include "tlf_curses.h"
 #include "ui_utils.h"
 #include "cleanup.h"
 
 pthread_mutex_t disk_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-char lan_logline[81];
+char lan_logline[LOGLINELEN + 1];
 
 
 /* restart band timer if in wpx and qso on new band */
@@ -106,10 +107,10 @@ void log_to_disk(int from_lan) {
 
     } else {			/* qso from lan */
 
-	/* LOGENTRY contains 82 characters (node,command and logline */
-	g_strlcpy(lan_logline, lan_message + 2, 81);
-	char *fill = g_strnfill(80 - strlen(lan_logline), ' ');
-	g_strlcat(lan_logline, fill, 81);    /* fill with spaces if needed */
+	/* LOGENTRY contains max. 89 characters (node,command and logline */
+	g_strlcpy(lan_logline, lan_message + 2, LOGLINELEN);
+	char *fill = g_strnfill(LOGLINELEN - 1 - strlen(lan_logline), ' ');
+	g_strlcat(lan_logline, fill, LOGLINELEN); /* add spaces if no frequency data */
 
 	if (cqwwm2) {	    /* mark as coming from other station */
 	    if (lan_message[0] != thisnode)
@@ -118,7 +119,11 @@ void log_to_disk(int from_lan) {
 
 	total = total + score2(lan_logline);
 
-	struct qso_t *qso = parse_qso(lan_logline);
+	gchar *tlogline = g_strdup(lan_logline);
+
+	struct qso_t *qso = parse_qso(tlogline);
+
+	g_free(tlogline);
 
 	addcall2();
 
@@ -155,13 +160,7 @@ void log_to_disk(int from_lan) {
 
     mvaddstr(12, 23, qsonrstr);
 
-    if (no_rst) {
-	mvaddstr(12, 44, "   ");
-	mvaddstr(12, 49, "   ");
-    } else {
-	mvaddstr(12, 44, sent_rst);
-	mvaddstr(12, 49, recvd_rst);
-    }
+    update_line_rst();
 
     sync();
 

@@ -1,7 +1,7 @@
 import re
 
 # e.g. 001 57n85o
-XCHG_PATTERN = re.compile('\d+\s+(\d+)\s*([NS])\s*(\d+)\s*([OW])')
+XCHG_PATTERN = re.compile(r'\d+\s+(\d+)\s*([NS])\s*(\d+)\s*([OW])')
 
 def setup():
     return None
@@ -27,8 +27,8 @@ def score(qso):
     lon = int(m.group(3))
     if m.group(4) == 'O':
         lon = -lon
-    points = points + abs(lat - int(tlf.MY_LAT))
-    diff_long = abs(lon - int(tlf.MY_LONG))
+    points = points + abs(lat - round(tlf.MY_LAT))
+    diff_long = abs(lon - round(tlf.MY_LONG))
     if diff_long > 180:
         diff_long = 360 - diff_long
     points = points + diff_long

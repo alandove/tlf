@@ -40,6 +40,61 @@
 GPtrArray *mults_possible;
 
 /*
+ * process a space separated list of multipliers from qso->mult1_value.
+ * qso->mult1_value is updated with the list of actually applied new multipliers.
+ * if none could be applied then it contains an empty string.
+ * returns the index of the first applicable multiplier or -1
+ */
+static int remember_generic_mult(struct qso_t *qso, bool check_only) {
+    static GRegex *regex = NULL;
+    if (regex == NULL) {
+	// words with trailing space(s) or at the end of string
+	regex = g_regex_new("(\\S+(\\s+|$))", 0, 0, NULL);
+    }
+
+    GMatchInfo *match_info;
+    g_regex_match(regex, qso->mult1_value, 0, &match_info);
+
+    int first_mult_index = -1;
+    GString *applied_mults = g_string_new(NULL);
+
+    bool go = true;
+
+    while (go && g_match_info_matches(match_info)) {
+	gchar *word = g_match_info_fetch(match_info, 0);
+
+	gchar *mult = g_strdup(word);
+	g_strchomp(mult);   // remove trailing whitespace for mult check
+
+	int mult_index = remember_multi(mult, qso->bandindex, generic_mult, check_only);
+
+	if (mult_index >= 0) {
+	    if (first_mult_index < 0) {
+		first_mult_index = mult_index;
+	    }
+	    if (check_only) {
+		go = false;  // in check mode stop on first match
+	    } else {
+		// aggregate the original value incl. whitespace
+		g_string_append(applied_mults, word);
+	    }
+	}
+
+	g_free(mult);
+	g_free(word);
+	g_match_info_next(match_info, NULL);
+    }
+
+    g_match_info_free(match_info);
+
+    // copy applied_mults to mult1_value
+    g_free(qso->mult1_value);
+    qso->mult1_value = g_string_free(applied_mults, FALSE);
+
+    return first_mult_index;
+}
+
+/*
  * \return	      - index in mults[] array if new mult or new on band
  *			-1 if not a (new) mult
  */
@@ -74,7 +129,6 @@ static int addmult_internal(struct qso_t *qso, bool check_only) {
 
     // --------------------------- section_mult_once--------------------------
     else if (sectn_mult_once) {
-
 	/* is it a mult? */
 	idx = get_exact_mult_index(qso->mult1_value);
 	if (idx >= 0) {
@@ -118,8 +172,7 @@ static int addmult_internal(struct qso_t *qso, bool check_only) {
 
     // -----------   generic: use mult1   -----------
     else if (generic_mult != MULT_NONE) {
-	mult_index = remember_multi(qso->mult1_value, qso->bandindex, generic_mult,
-				    check_only);
+	mult_index = remember_generic_mult(qso, check_only);
     }
 
     free(stripped_comment);

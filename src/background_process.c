@@ -135,7 +135,7 @@ void *background_process(void *ptr) {
 	    if (lan_message[0] == '\0') {
 
 		if (lan_recv() >= 0) {
-		    lan_message[strlen(lan_message) - 1] = '\0';
+		    g_strchomp(lan_message);
 		}
 	    }
 
@@ -151,7 +151,7 @@ void *background_process(void *ptr) {
 		}
 	    }
 	    if ((*lan_message != '\0') && (lan_message[0] == thisnode)) {
-		TLF_LOG_WARN("%s", "Warning: NODE ID CONFLICT ?! You should use another ID! ");
+		TLF_SHOW_WARN("%s", "Warning: NODE ID CONFLICT ?! You should use another ID! ");
 	    }
 
 	    if ((*lan_message != '\0')
@@ -183,7 +183,7 @@ void *background_process(void *ptr) {
 		    case CLUSTERMSG:
 			prmessage = g_strndup(lan_message + 2, 80);
 			if (strstr(prmessage, my.call) != NULL) {	// alert for cluster messages
-			    TLF_LOG_INFO(prmessage);
+			    TLF_SHOW_INFO(prmessage);
 			}
 
 			addtext(prmessage);
@@ -205,11 +205,11 @@ void *background_process(void *ptr) {
 			talkarray[4][2] = '\0';
 			g_strlcat(talkarray[4], lan_message + 2,
 				  sizeof(talkarray[4]));
-			TLF_LOG_INFO(" MSG from %s", talkarray[4]);
+			TLF_SHOW_INFO(" MSG from %s", talkarray[4]);
 			break;
 		    case FREQMSG:
 			if ((lan_message[0] >= 'A')
-				&& (lan_message[0] <= 'A' + MAXNODES)) {
+				&& (lan_message[0] < 'A' + MAXNODES)) {
 			    node_frequencies[lan_message[0] - 'A'] =
 				atof(lan_message + 2) * 1000.0;
 			    break;
@@ -229,7 +229,7 @@ void *background_process(void *ptr) {
 
 		    case TIMESYNC:
 			if ((lan_message[0] >= 'A')
-				&& (lan_message[0] <= 'A' + MAXNODES)) {
+				&& (lan_message[0] < 'A' + MAXNODES)) {
 			    time_t lantime = atoi(lan_message + 2);
 
 			    time_t delta = lantime - (get_time() - timecorr);
